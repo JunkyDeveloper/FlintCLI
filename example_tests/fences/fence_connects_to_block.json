@@ -11,40 +11,40 @@
   },
   "timeline": [
     {
-      "at": 0,
+      "at": 1,
       "do": "place",
       "pos": [0, 100, 0],
       "block": "minecraft:oak_fence"
     },
     {
-      "at": 1,
+      "at": 2,
       "do": "assert",
       "checks": [
         {"pos": [0, 100, 0], "is": "minecraft:oak_fence"}
       ]
     },
     {
-      "at": 1,
+      "at": 2,
       "do": "assert_state",
       "pos": [0, 100, 0],
       "state": "east",
       "values": ["false"]
     },
     {
-      "at": 1,
+      "at": 2,
       "do": "assert_state",
       "pos": [0, 100, 0],
       "state": "west",
       "values": ["false"]
     },
     {
-      "at": 2,
+      "at": 3,
       "do": "place",
       "pos": [1, 100, 0],
       "block": "minecraft:stone"
     },
     {
-      "at": 4,
+      "at": 5,
       "do": "assert_state",
       "pos": [0, 100, 0],
       "state": "east",
