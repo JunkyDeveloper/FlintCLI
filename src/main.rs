@@ -73,11 +73,7 @@ async fn main() -> Result<()> {
         } else {
             format!("at: {}", args.path.as_ref().unwrap().display())
         };
-        eprintln!(
-            "{} No test files found {}",
-            "Error:".red().bold(),
-            location
-        );
+        eprintln!("{} No test files found {}", "Error:".red().bold(), location);
         std::process::exit(1);
     }
 
@@ -166,4 +162,3 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
-

@@ -46,7 +46,9 @@ impl TestExecutor {
             );
 
             // Send chat message to inform player
-            self.bot.send_command("say Waiting for step/continue (s = step, c = continue)").await?;
+            self.bot
+                .send_command("say Waiting for step/continue (s = step, c = continue)")
+                .await?;
 
             // First, drain any old messages from the chat queue
             while self
@@ -75,10 +77,18 @@ impl TestExecutor {
                     let trimmed = msg_lower.trim();
 
                     // Match the message ending with just "s" or "c" (player commands)
-                    if trimmed.ends_with(" s") || trimmed == "s" || trimmed.ends_with(" step") || trimmed == "step" {
+                    if trimmed.ends_with(" s")
+                        || trimmed == "s"
+                        || trimmed.ends_with(" step")
+                        || trimmed == "step"
+                    {
                         println!("  {} Received 's' from chat", "→".blue());
                         return Ok(false); // Step mode
-                    } else if trimmed.ends_with(" c") || trimmed == "c" || trimmed.ends_with(" continue") || trimmed == "continue" {
+                    } else if trimmed.ends_with(" c")
+                        || trimmed == "c"
+                        || trimmed.ends_with(" continue")
+                        || trimmed == "continue"
+                    {
                         println!("  {} Received 'c' from chat", "→".blue());
                         return Ok(true); // Continue mode
                     }
@@ -202,9 +212,9 @@ impl TestExecutor {
                 if message.contains("Sprint completed") {
                     // Try to extract ms per tick
                     // Format: "... or X ms per tick"
-                    if let Some(ms_part) = message.split("or ").nth(1) {
-                        if let Some(ms_str) = ms_part.split(" ms per tick").next() {
-                            if let Ok(ms) = ms_str.trim().parse::<f64>() {
+                    if let Some(ms_part) = message.split("or ").nth(1)
+                        && let Some(ms_str) = ms_part.split(" ms per tick").next()
+                            && let Ok(ms) = ms_str.trim().parse::<f64>() {
                                 let ms_rounded = ms.ceil() as u64;
                                 println!(
                                     "    {} Sprint {} ticks completed in {} ms per tick",
@@ -215,8 +225,6 @@ impl TestExecutor {
                                 // Return total time: ms per tick * number of ticks
                                 return Ok(ms_rounded * ticks as u64);
                             }
-                        }
-                    }
                     // If we found the message but couldn't parse, use default
                     println!(
                         "    {} Sprint {} ticks completed (timing not parsed)",
@@ -252,7 +260,10 @@ impl TestExecutor {
         let aggregate = TimelineAggregate::from_tests(tests_with_offsets);
 
         println!("  Global timeline: {} ticks", aggregate.max_tick);
-        println!("  {} unique tick steps with actions", aggregate.unique_tick_count());
+        println!(
+            "  {} unique tick steps with actions",
+            aggregate.unique_tick_count()
+        );
         if !aggregate.breakpoints.is_empty() {
             let mut sorted_breakpoints: Vec<_> = aggregate.breakpoints.iter().collect();
             sorted_breakpoints.sort();
@@ -350,7 +361,8 @@ impl TestExecutor {
                 } else {
                     // In continue mode, sprint to next event or breakpoint
                     // Use the aggregate's helper method to find the next event
-                    let next_event_tick = aggregate.next_event_tick(current_tick)
+                    let next_event_tick = aggregate
+                        .next_event_tick(current_tick)
                         .unwrap_or(aggregate.max_tick + 1);
 
                     // Calculate how many ticks to sprint
@@ -639,4 +651,3 @@ impl TestExecutor {
         }
     }
 }
-
