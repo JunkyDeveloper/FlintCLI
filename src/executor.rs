@@ -179,8 +179,91 @@ impl TestExecutor {
         self.bot.connect(server).await
     }
 
+    /// Query the current game time from the server
+    /// Returns the game time in ticks
+    async fn query_gametime(&mut self) -> Result<u32> {
+        // Clear any pending chat messages
+        while self
+            .bot
+            .recv_chat_timeout(std::time::Duration::from_millis(10))
+            .await
+            .is_some()
+        {
+            // Discard old messages
+        }
+
+        // Send the time query command
+        self.bot
+            .send_command("time query gametime")
+            .await?;
+
+        // Wait for response: "The time is <number>"
+        let timeout = std::time::Duration::from_secs(5);
+        let start = std::time::Instant::now();
+
+        while start.elapsed() < timeout {
+            if let Some(message) = self
+                .bot
+                .recv_chat_timeout(std::time::Duration::from_millis(100))
+                .await
+            {
+                // Look for "The time is" message
+                if message.contains("The time is") {
+                    // Extract the time value
+                    if let Some(time_str) = message.split("The time is ").nth(1) {
+                        // Parse the number (might have formatting)
+                        let time_clean = time_str
+                            .chars()
+                            .filter(|c| c.is_ascii_digit())
+                            .collect::<String>();
+                        if let Ok(time) = time_clean.parse::<u32>() {
+                            return Ok(time);
+                        }
+                    }
+                }
+            }
+        }
+
+        anyhow::bail!("Failed to query game time: timeout waiting for response")
+    }
+
+    /// Step a single tick using /tick step and verify completion
+    /// Returns the time taken
+    async fn step_tick(&mut self) -> Result<u64> {
+        let before = self.query_gametime().await?;
+
+        let start = std::time::Instant::now();
+        self.bot.send_command("tick step").await?;
+
+        // Wait for the tick to actually complete by polling gametime
+        let timeout = std::time::Duration::from_secs(5);
+        let poll_start = std::time::Instant::now();
+
+        loop {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            let after = self.query_gametime().await?;
+
+            if after > before {
+                let elapsed = start.elapsed().as_millis() as u64;
+                println!(
+                    "    {} Stepped 1 tick (verified: {} -> {}) in {} ms",
+                    "→".dimmed(),
+                    before,
+                    after,
+                    elapsed
+                );
+                return Ok(elapsed);
+            }
+
+            if poll_start.elapsed() >= timeout {
+                anyhow::bail!("Tick step verification timeout: game time did not advance");
+            }
+        }
+    }
+
     /// Sprint ticks and capture the time taken from server output
     /// Returns the ms per tick from the server's sprint completion message
+    /// NOTE: Accounts for Minecraft's off-by-one bug where "tick sprint N" executes N+1 ticks
     async fn sprint_ticks(&mut self, ticks: u32) -> Result<u64> {
         // Clear any pending chat messages
         while self
@@ -192,9 +275,13 @@ impl TestExecutor {
             // Discard old messages
         }
 
+        // Account for Minecraft's off-by-one bug: "tick sprint N" executes N+1 ticks
+        // So to execute `ticks` ticks, we request ticks-1
+        let ticks_to_request = ticks - 1;
+
         // Send the sprint command
         self.bot
-            .send_command(&format!("tick sprint {}", ticks))
+            .send_command(&format!("tick sprint {}", ticks_to_request))
             .await?;
 
         // Wait for the "Sprint completed" message
@@ -308,6 +395,17 @@ impl TestExecutor {
         // Track results per test
         let mut test_results: Vec<(usize, usize)> = vec![(0, 0); tests_with_offsets.len()]; // (passed, failed)
 
+        // Track which tests have been cleaned up
+        let mut tests_cleaned: Vec<bool> = vec![false; tests_with_offsets.len()];
+
+        // Calculate max tick for each test
+        let mut test_max_ticks: Vec<u32> = vec![0; tests_with_offsets.len()];
+        for (tick, entries) in &aggregate.timeline {
+            for (test_idx, _, _) in entries {
+                test_max_ticks[*test_idx] = test_max_ticks[*test_idx].max(*tick);
+            }
+        }
+
         // Execute merged timeline
         let mut current_tick = 0;
         while current_tick <= aggregate.max_tick {
@@ -339,6 +437,30 @@ impl TestExecutor {
                 }
             }
 
+            // Clean up tests that have completed (current tick exceeds their max tick)
+            for test_idx in 0..tests_with_offsets.len() {
+                if !tests_cleaned[test_idx] && current_tick > test_max_ticks[test_idx] {
+                    let (test, offset) = &tests_with_offsets[test_idx];
+                    println!(
+                        "\n{} Cleaning up test [{}] (completed at tick {})...",
+                        "→".blue(),
+                        test.name,
+                        test_max_ticks[test_idx]
+                    );
+                    let region = test.cleanup_region();
+                    let world_min = self.apply_offset(region[0], *offset);
+                    let world_max = self.apply_offset(region[1], *offset);
+                    let cmd = format!(
+                        "fill {} {} {} {} {} {} air",
+                        world_min[0], world_min[1], world_min[2], world_max[0], world_max[1],
+                        world_max[2]
+                    );
+                    self.bot.send_command(&cmd).await?;
+                    tests_cleaned[test_idx] = true;
+                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                }
+            }
+
             // Check for breakpoint at end of this tick (before stepping)
             // Or if we're in stepping mode, break at every tick
             if aggregate.breakpoints.contains(&current_tick) || stepping_mode {
@@ -355,7 +477,7 @@ impl TestExecutor {
             if current_tick < aggregate.max_tick {
                 if stepping_mode {
                     // In stepping mode, only advance one tick at a time
-                    self.sprint_ticks(1).await?;
+                    self.step_tick().await?;
                     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
                     current_tick += 1;
                 } else {
@@ -372,8 +494,10 @@ impl TestExecutor {
                         aggregate.max_tick - current_tick
                     };
 
-                    // Sprint the ticks
-                    let sprint_time_ms = if ticks_to_sprint > 0 {
+                    // Sprint the ticks (use step_tick for single tick, sprint_ticks for multiple)
+                    let sprint_time_ms = if ticks_to_sprint == 1 {
+                        self.step_tick().await?
+                    } else if ticks_to_sprint > 1 {
                         self.sprint_ticks(ticks_to_sprint).await?
                     } else {
                         0
@@ -393,19 +517,28 @@ impl TestExecutor {
         // Unfreeze time
         self.bot.send_command("tick unfreeze").await?;
 
-        // Clean all test areas after completion
-        println!("\n{} Cleaning up all test areas...", "→".blue());
-        for (test, offset) in tests_with_offsets.iter() {
-            let region = test.cleanup_region();
-            let world_min = self.apply_offset(region[0], *offset);
-            let world_max = self.apply_offset(region[1], *offset);
-            let cmd = format!(
-                "fill {} {} {} {} {} {} air",
-                world_min[0], world_min[1], world_min[2], world_max[0], world_max[1], world_max[2]
-            );
-            self.bot.send_command(&cmd).await?;
+        // Clean up any remaining tests that haven't been cleaned yet (edge case)
+        for test_idx in 0..tests_with_offsets.len() {
+            if !tests_cleaned[test_idx] {
+                let (test, offset) = &tests_with_offsets[test_idx];
+                println!(
+                    "\n{} Cleaning up remaining test [{}]...",
+                    "→".blue(),
+                    test.name
+                );
+                let region = test.cleanup_region();
+                let world_min = self.apply_offset(region[0], *offset);
+                let world_max = self.apply_offset(region[1], *offset);
+                let cmd = format!(
+                    "fill {} {} {} {} {} {} air",
+                    world_min[0], world_min[1], world_min[2], world_max[0], world_max[1],
+                    world_max[2]
+                );
+                self.bot.send_command(&cmd).await?;
+                tests_cleaned[test_idx] = true;
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            }
         }
-        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
         // Build results
         let results: Vec<TestResult> = tests_with_offsets
