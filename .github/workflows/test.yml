@@ -41,37 +41,82 @@ jobs:
       run: |
         mkdir -p minecraft-server
         cd minecraft-server
-        # Download Paper MC 1.21.9 (latest compatible version)
-        wget -O server.jar https://fill-data.papermc.io/v1/objects/aec002e77c7566e49494fdf05430b96078ffd1d7430e652d4f338fef951e7a10/paper-1.21.9-59.jar
+        # Download Fabric 1.21.11 (latest compatible version)
+        wget -O server.jar https://meta.fabricmc.net/v2/versions/loader/1.21.11/0.18.4/1.1.1/server/jar
         echo "eula=true" > eula.txt
 
     - name: Configure Minecraft Server
       run: |
         cd minecraft-server
         cat > server.properties << EOF
-        enable-command-block=true
+        #Minecraft server properties
+        accepts-transfers=false
+        allow-flight=false
+        broadcast-console-to-ops=true
+        broadcast-rcon-to-ops=true
+        bug-report-link=
+        difficulty=easy
+        enable-code-of-conduct=false
+        enable-jmx-monitoring=false
+        enable-query=false
+        enable-rcon=false
+        enable-status=true
+        enforce-secure-profile=true
+        enforce-whitelist=false
+        entity-broadcast-range-percentage=100
+        force-gamemode=false
+        function-permission-level=2
         gamemode=creative
-        difficulty=peaceful
-        spawn-protection=0
-        max-players=10
+        generate-structures=false
+        generator-settings={}
+        hardcore=false
+        hide-online-players=false
+        initial-disabled-packs=
+        initial-enabled-packs=vanilla
+        level-name=world
+        level-seed=
+        level-type=minecraft\:flat
+        log-ips=true
+        management-server-allowed-origins=
+        management-server-enabled=false
+        management-server-host=localhost
+        management-server-port=0
+        management-server-secret=PYFrHIuydP0VRu32cc3Zb3LsiEsuYGWfRsOGASJQ
+        management-server-tls-enabled=true
+        management-server-tls-keystore=
+        management-server-tls-keystore-password=
+        max-chained-neighbor-updates=1000000
+        max-players=20
+        max-tick-time=60000
+        max-world-size=29999984
+        motd=A Minecraft Server
+        network-compression-threshold=256
         online-mode=false
-        pvp=false
+        op-permission-level=4
+        pause-when-empty-seconds=60
+        player-idle-timeout=0
+        prevent-proxy-connections=false
+        query.port=25565
+        rate-limit=0
+        rcon.password=
+        rcon.port=25575
+        region-file-compression=deflate
+        require-resource-pack=false
+        resource-pack=
+        resource-pack-id=
+        resource-pack-prompt=
+        resource-pack-sha1=
+        server-ip=
         server-port=25565
-        view-distance=10
         simulation-distance=10
-        level-type=flat
-        generator-settings={"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:stone","height":2},{"block":"minecraft:grass_block","height":1}],"biome":"minecraft:plains"}
-        spawn-monsters=false
-        spawn-animals=false
-        spawn-npcs=false
-        EOF
-
-        # Create spigot.yml to disable spam filter completely
-        # This prevents "disconnect.spam" kicks when running multiple commands rapidly
-        cat > spigot.yml << EOF
-        commands:
-          spam-exclusions:
-            - "/"
+        spawn-protection=16
+        status-heartbeat-interval=0
+        sync-chunk-writes=true
+        text-filtering-config=
+        text-filtering-version=0
+        use-native-transport=true
+        view-distance=10
+        white-list=false
         EOF
 
     - name: Start Minecraft Server
@@ -94,8 +139,8 @@ jobs:
         sleep 2
 
         # Op the bot player by writing directly to the pipe
-        echo "op FlintMC_TestBot" > server_input
-        echo "Sent op command for FlintMC_TestBot"
+        echo "op flintmc_testbot" > server_input
+        echo "Sent op command for flintmc_testbot"
         sleep 2
 
     - name: Build FlintMC
@@ -116,7 +161,7 @@ jobs:
         pkill -f "java.*server.jar" || true
 
     - name: Upload Server Logs
-      if: failure()
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: minecraft-server-logs
