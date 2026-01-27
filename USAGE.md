@@ -25,6 +25,8 @@ flintmc [OPTIONS] --server <SERVER> [PATH]
 | `--verbose` | `-v` | Show detailed per-action output during execution |
 | `--quiet` | `-q` | Suppress the progress bar |
 | `--fail-fast` | | Stop after the first test failure |
+| `--list` | | List discovered tests and exit |
+| `--dry-run` | | Show what would be run without connecting to the server |
 | `--format <FORMAT>` | | Output format: `pretty` (default), `json`, `tap`, `junit` |
 
 ## Running tests

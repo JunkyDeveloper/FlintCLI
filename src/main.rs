@@ -9,7 +9,7 @@ use executor::FailureDetail;
 use flint_core::loader::TestLoader;
 use flint_core::results::TestResult;
 use flint_core::spatial::calculate_test_offset_default;
-use flint_core::test_spec::TestSpec;
+use flint_core::test_spec::{ActionType, TestSpec};
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
@@ -241,7 +241,7 @@ struct Args {
 
     /// Server address (e.g., localhost:25565)
     #[arg(short, long)]
-    server: String,
+    server: Option<String>,
 
     /// Recursively search directories for test files
     #[arg(short, long)]
@@ -274,6 +274,14 @@ struct Args {
     /// Stop after the first test failure
     #[arg(long)]
     fail_fast: bool,
+
+    /// List discovered tests and exit
+    #[arg(long)]
+    list: bool,
+
+    /// Show what would be run without connecting to the server
+    #[arg(long)]
+    dry_run: bool,
 
     /// Output format for test results
     #[arg(long, value_enum, default_value_t = OutputFormat::Pretty)]
@@ -349,6 +357,95 @@ async fn main() -> Result<()> {
         println!("Found {} test file(s)\n", test_files.len());
     }
 
+    // --list: print test names and exit
+    if args.list {
+        for test_file in &test_files {
+            match TestSpec::from_file(test_file) {
+                Ok(test) => println!("{}", test.name),
+                Err(e) => {
+                    eprintln!(
+                        "{} Failed to load test {}: {}",
+                        "Error:".red().bold(),
+                        test_file.display(),
+                        e
+                    );
+                }
+            }
+        }
+        return Ok(());
+    }
+
+    // --dry-run: show execution plan and exit
+    if args.dry_run {
+        let chunks: Vec<_> = test_files.chunks(CHUNK_SIZE).collect();
+        let n = chunks.len();
+        println!(
+            "{} tests, {} {} (up to {} tests per batch)",
+            format_number(test_files.len()),
+            n,
+            if n == 1 { "batch" } else { "batches" },
+            CHUNK_SIZE
+        );
+        println!();
+
+        for (chunk_idx, chunk) in chunks.iter().enumerate() {
+            if chunks.len() > 1 {
+                println!(
+                    "Batch {}/{} ({} tests)",
+                    chunk_idx + 1,
+                    chunks.len(),
+                    chunk.len()
+                );
+            }
+            for (test_index, test_file) in chunk.iter().enumerate() {
+                match TestSpec::from_file(test_file) {
+                    Ok(test) => {
+                        let offset = calculate_test_offset_default(test_index, chunk.len());
+                        let max_tick = test.max_tick();
+                        let assertions = test
+                            .timeline
+                            .iter()
+                            .filter(|e| matches!(e.action_type, ActionType::Assert { .. }))
+                            .count();
+                        let tags = if test.tags.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" [{}]", test.tags.join(", "))
+                        };
+                        println!(
+                            "  {} ({}t, {}a, offset [{},{},{}]){}",
+                            test.name,
+                            max_tick,
+                            assertions,
+                            offset[0],
+                            offset[1],
+                            offset[2],
+                            tags.dimmed()
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "{} Failed to load test {}: {}",
+                            "Error:".red().bold(),
+                            test_file.display(),
+                            e
+                        );
+                    }
+                }
+            }
+        }
+        return Ok(());
+    }
+
+    // Require --server for execution modes
+    let server = args.server.as_deref().unwrap_or_else(|| {
+        eprintln!(
+            "{} --server is required when running tests",
+            "Error:".red().bold()
+        );
+        std::process::exit(1);
+    });
+
     // Connect to server
     let mut executor = executor::TestExecutor::new();
 
@@ -375,8 +472,8 @@ async fn main() -> Result<()> {
         println!("  Commands: !search, !run, !run-all, !run-tags, !list, !reload, !help, !stop");
         println!("  During tests: type 's' to step, 'c' to continue\n");
 
-        println!("{} Connecting to {}...", "→".blue(), args.server);
-        executor.connect(&args.server).await?;
+        println!("{} Connecting to {}...", "→".blue(), server);
+        executor.connect(server).await?;
         println!("{} Connected successfully\n", "✓".green());
 
         executor.interactive_mode(&mut test_loader).await?;
@@ -384,9 +481,9 @@ async fn main() -> Result<()> {
     }
 
     if verbose {
-        println!("{} Connecting to {}...", "→".blue(), args.server);
+        println!("{} Connecting to {}...", "→".blue(), server);
     }
-    executor.connect(&args.server).await?;
+    executor.connect(server).await?;
     if verbose {
         println!("{} Connected successfully\n", "✓".green());
     }
