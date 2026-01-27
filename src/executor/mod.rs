@@ -90,7 +90,9 @@ impl TestExecutor {
         self.verbose = true;
 
         // Send help message to chat (without ! to avoid self-triggering)
-        self.bot.send_command("say FlintMC Interactive Mode active").await?;
+        self.bot
+            .send_command("say FlintMC Interactive Mode active")
+            .await?;
         tokio::time::sleep(tokio::time::Duration::from_millis(COMMAND_DELAY_MS)).await;
         self.bot.send_command("say Type: help, search, run, run-all, run-tags, list, reload, stop (prefix with !)").await?;
         tokio::time::sleep(tokio::time::Duration::from_millis(COMMAND_DELAY_MS)).await;
@@ -123,7 +125,9 @@ impl TestExecutor {
 
                     "!search" => {
                         if args.is_empty() {
-                            self.bot.send_command("say Usage: !search <pattern>").await?;
+                            self.bot
+                                .send_command("say Usage: !search <pattern>")
+                                .await?;
                             continue;
                         }
                         let pattern = args.join(" ");
@@ -132,18 +136,22 @@ impl TestExecutor {
 
                     "!run" => {
                         if args.is_empty() {
-                            self.bot.send_command("say Usage: !run <test_name> [step]").await?;
+                            self.bot
+                                .send_command("say Usage: !run <test_name> [step]")
+                                .await?;
                             continue;
                         }
 
                         // Check for step flag
-                        let (test_name, step_mode) = if args.last().map(|s| s.as_str()) == Some("step") && args.len() > 1 {
-                            (args[..args.len()-1].join(" "), true)
-                        } else {
-                            (args.join(" "), false)
-                        };
+                        let (test_name, step_mode) =
+                            if args.last().map(|s| s.as_str()) == Some("step") && args.len() > 1 {
+                                (args[..args.len() - 1].join(" "), true)
+                            } else {
+                                (args.join(" "), false)
+                            };
 
-                        self.handle_run(&all_test_files, &test_name, step_mode).await?;
+                        self.handle_run(&all_test_files, &test_name, step_mode)
+                            .await?;
                     }
 
                     "!run-all" => {
@@ -152,35 +160,49 @@ impl TestExecutor {
 
                     "!run-tags" => {
                         if args.is_empty() {
-                            self.bot.send_command("say Usage: !run-tags <tag1,tag2,...>").await?;
+                            self.bot
+                                .send_command("say Usage: !run-tags <tag1,tag2,...>")
+                                .await?;
                             continue;
                         }
-                        let tags: Vec<String> = args[0].split(',').map(|s| s.trim().to_string()).collect();
+                        let tags: Vec<String> =
+                            args[0].split(',').map(|s| s.trim().to_string()).collect();
                         self.handle_run_tags(test_loader, &tags).await?;
                     }
 
                     "!stop" => {
-                        self.bot.send_command("say Exiting interactive mode. Goodbye!").await?;
+                        self.bot
+                            .send_command("say Exiting interactive mode. Goodbye!")
+                            .await?;
                         return Ok(());
                     }
 
                     "!reload" => {
                         test_loader.verify_and_rebuild_index()?;
                         all_test_files = test_loader.collect_all_test_files()?;
-                        self.bot.send_command(&format!("say Reloaded {} tests", all_test_files.len())).await?;
+                        self.bot
+                            .send_command(&format!("say Reloaded {} tests", all_test_files.len()))
+                            .await?;
                     }
 
                     // Recorder commands
                     "!record" => {
                         if args.is_empty() {
-                            self.bot.send_command("say Usage: !record <test_name> [player_name]").await?;
-                            self.bot.send_command("say Example: !record my_test or !record fence/fence_connect").await?;
+                            self.bot
+                                .send_command("say Usage: !record <test_name> [player_name]")
+                                .await?;
+                            self.bot
+                                .send_command(
+                                    "say Example: !record my_test or !record fence/fence_connect",
+                                )
+                                .await?;
                             continue;
                         }
                         let test_name = args[0].clone();
                         // If player name not provided, use sender if available
                         let player_name = args.get(1).cloned().or_else(|| sender.clone());
-                        self.handle_record_start(&test_name, test_loader, player_name).await?;
+                        self.handle_record_start(&test_name, test_loader, player_name)
+                            .await?;
                     }
                     "!assert_changes" => {
                         self.handle_record_assert_changes().await?;
@@ -192,12 +214,13 @@ impl TestExecutor {
 
                     "!assert" => {
                         if args.len() < 3 {
-                            self.bot.send_command("say Usage: !assert <x> <y> <z>").await?;
+                            self.bot
+                                .send_command("say Usage: !assert <x> <y> <z>")
+                                .await?;
                             continue;
                         }
                         self.handle_record_assert(&args).await?;
                     }
-
 
                     "!save" => {
                         if self.handle_record_save().await? {
@@ -213,7 +236,12 @@ impl TestExecutor {
 
                     _ => {
                         if command.starts_with('!') {
-                            self.bot.send_command(&format!("say Unknown command: {}. Type !help for commands.", command)).await?;
+                            self.bot
+                                .send_command(&format!(
+                                    "say Unknown command: {}. Type !help for commands.",
+                                    command
+                                ))
+                                .await?;
                         }
                     }
                 }
@@ -246,8 +274,6 @@ impl TestExecutor {
 
         Ok(blocks)
     }
-
-
 
     /// Run tests in parallel with merged timeline
     pub async fn run_tests_parallel(
@@ -324,7 +350,8 @@ impl TestExecutor {
         let mut test_results: Vec<(usize, usize)> = vec![(0, 0); tests_with_offsets.len()];
 
         // Track first failure detail per test
-        let mut test_failures: Vec<Option<FailureDetail>> = (0..tests_with_offsets.len()).map(|_| None).collect();
+        let mut test_failures: Vec<Option<FailureDetail>> =
+            (0..tests_with_offsets.len()).map(|_| None).collect();
 
         // Track which tests have been cleaned up
         let mut tests_cleaned: Vec<bool> = vec![false; tests_with_offsets.len()];
@@ -346,7 +373,10 @@ impl TestExecutor {
                 for (test_idx, entry, value_idx) in entries {
                     let (test, offset) = &tests_with_offsets[*test_idx];
 
-                    match self.execute_action(current_tick, entry, *value_idx, *offset).await {
+                    match self
+                        .execute_action(current_tick, entry, *value_idx, *offset)
+                        .await
+                    {
                         Ok(actions::ActionOutcome::AssertPassed) => {
                             test_results[*test_idx].0 += 1;
                         }
@@ -401,8 +431,12 @@ impl TestExecutor {
                     let world_max = actions::apply_offset(region[1], *offset);
                     let cmd = format!(
                         "fill {} {} {} {} {} {} air",
-                        world_min[0], world_min[1], world_min[2],
-                        world_max[0], world_max[1], world_max[2]
+                        world_min[0],
+                        world_min[1],
+                        world_min[2],
+                        world_max[0],
+                        world_max[1],
+                        world_max[2]
                     );
                     self.bot.send_command(&cmd).await?;
                     tests_cleaned[test_idx] = true;
@@ -473,15 +507,23 @@ impl TestExecutor {
             if !tests_cleaned[test_idx] {
                 let (test, offset) = &tests_with_offsets[test_idx];
                 if verbose {
-                    println!("\n{} Cleaning up remaining test [{}]...", "→".blue(), test.name);
+                    println!(
+                        "\n{} Cleaning up remaining test [{}]...",
+                        "→".blue(),
+                        test.name
+                    );
                 }
                 let region = test.cleanup_region();
                 let world_min = actions::apply_offset(region[0], *offset);
                 let world_max = actions::apply_offset(region[1], *offset);
                 let cmd = format!(
                     "fill {} {} {} {} {} {} air",
-                    world_min[0], world_min[1], world_min[2],
-                    world_max[0], world_max[1], world_max[2]
+                    world_min[0],
+                    world_min[1],
+                    world_min[2],
+                    world_max[0],
+                    world_max[1],
+                    world_max[2]
                 );
                 self.bot.send_command(&cmd).await?;
                 tests_cleaned[test_idx] = true;
@@ -553,14 +595,13 @@ impl TestExecutor {
             .iter()
             .enumerate()
             .filter_map(|(idx, (test, _))| {
-                test_failures[idx].take().map(|detail| (test.name.clone(), detail))
+                test_failures[idx]
+                    .take()
+                    .map(|detail| (test.name.clone(), detail))
             })
             .collect();
 
-        Ok(TestRunOutput {
-            results,
-            failures,
-        })
+        Ok(TestRunOutput { results, failures })
     }
 
     async fn execute_action(
@@ -570,7 +611,16 @@ impl TestExecutor {
         value_idx: usize,
         offset: [i32; 3],
     ) -> Result<actions::ActionOutcome> {
-        actions::execute_action(&mut self.bot, tick, entry, value_idx, offset, self.action_delay_ms, self.verbose).await
+        actions::execute_action(
+            &mut self.bot,
+            tick,
+            entry,
+            value_idx,
+            offset,
+            self.action_delay_ms,
+            self.verbose,
+        )
+        .await
     }
 }
 

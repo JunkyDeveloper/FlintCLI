@@ -85,15 +85,19 @@ impl TestBot {
                             tracing::info!("Bot in game state");
                         }
                         Event::Chat(m) => {
-                            // Extract the message content 
+                            // Extract the message content
                             let message = m.message().to_string();
                             // Try to get sender name (best effort)
                             // Fallback: parse "<Name>"
                             let sender = if message.starts_with('<') {
                                 if let Some(end) = message.find('>') {
                                     Some(message[1..end].to_string())
-                                } else { None }
-                            } else { None };
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            };
 
                             if let Some(ref tx) = state.chat_tx {
                                 let _ = tx.send((sender, message));
@@ -153,7 +157,10 @@ impl TestBot {
     }
 
     /// Wait for a chat message with timeout
-    pub async fn recv_chat_timeout(&mut self, timeout: std::time::Duration) -> Option<(Option<String>, String)> {
+    pub async fn recv_chat_timeout(
+        &mut self,
+        timeout: std::time::Duration,
+    ) -> Option<(Option<String>, String)> {
         if let Some(ref mut rx) = self.chat_rx {
             tokio::time::timeout(timeout, rx.recv())
                 .await
@@ -207,9 +214,8 @@ impl TestBot {
         let client = client_guard
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Bot not initialized"))?;
-        
+
         let pos = client.position();
         Ok([pos.x as i32, pos.y as i32, pos.z as i32])
     }
 }
-

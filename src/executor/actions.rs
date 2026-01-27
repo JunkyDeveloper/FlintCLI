@@ -228,7 +228,8 @@ pub async fn execute_action(
 
                         // Check if the property value is in the block state string
                         let actual_lower = actual_str.to_lowercase();
-                        let prop_pattern = format!("{}: {}", prop_name, expected_value).to_lowercase();
+                        let prop_pattern =
+                            format!("{}: {}", prop_name, expected_value).to_lowercase();
                         let prop_pattern_quoted =
                             format!("{}: \"{}\"", prop_name, expected_value).to_lowercase();
                         // Handle numeric values with underscore prefix (e.g., level: _0)
@@ -309,7 +310,9 @@ fn extract_property_value(block_state_str: &str, prop_name: &str) -> Option<Stri
         let value_start = start + pattern.len();
         let rest = &block_state_str[value_start..];
         // Value ends at comma, space before }, or }
-        let end = rest.find(|c: char| c == ',' || c == '}').unwrap_or(rest.len());
+        let end = rest
+            .find(|c: char| c == ',' || c == '}')
+            .unwrap_or(rest.len());
         let value = rest[..end].trim().trim_matches('_');
         if !value.is_empty() {
             return Some(value.to_string());

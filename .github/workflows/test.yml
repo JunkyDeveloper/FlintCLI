@@ -124,7 +124,7 @@ jobs:
         cd minecraft-server
         # Start server with named pipe for console input
         mkfifo server_input
-        tail -f server_input | java -Xmx2G -Xms1G -jar server.jar nogui &
+        nohup bash -c 'tail -f server_input | java -Xmx2G -Xms1G -jar server.jar nogui' &
         SERVER_PID=$!
         echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
 
@@ -136,7 +136,14 @@ jobs:
           exit 1
         }
         echo "Server started successfully"
-        sleep 2
+
+        # Wait for TCP port to actually accept connections
+        echo "Waiting for port 25565..."
+        timeout 30 bash -c 'until echo > /dev/tcp/localhost/25565 2>/dev/null; do sleep 1; done' || {
+          echo "Port 25565 not accepting connections"
+          exit 1
+        }
+        echo "Port 25565 is ready"
 
         # Op the bot player by writing directly to the pipe
         echo "op flintmc_testbot" > server_input

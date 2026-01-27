@@ -31,8 +31,16 @@ impl BoundingBox {
     /// Get cleanup region with padding
     pub fn to_cleanup_region(&self, padding: i32) -> [[i32; 3]; 2] {
         [
-            [self.min[0] - padding, self.min[1] - padding, self.min[2] - padding],
-            [self.max[0] + padding, self.max[1] + padding, self.max[2] + padding],
+            [
+                self.min[0] - padding,
+                self.min[1] - padding,
+                self.min[2] - padding,
+            ],
+            [
+                self.max[0] + padding,
+                self.max[1] + padding,
+                self.max[2] + padding,
+            ],
         ]
     }
 }

@@ -74,7 +74,11 @@ pub fn extract_block_id(debug_str: &str) -> String {
                 continue;
             }
             if let Some((k, v)) = part.split_once(':') {
-                pairs.push(format!("{}={}", k.trim().to_lowercase(), v.trim().to_lowercase()));
+                pairs.push(format!(
+                    "{}={}",
+                    k.trim().to_lowercase(),
+                    v.trim().to_lowercase()
+                ));
             }
         }
         if !pairs.is_empty() {

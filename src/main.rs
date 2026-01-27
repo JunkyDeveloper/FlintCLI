@@ -1,8 +1,9 @@
 mod bot;
 mod executor;
+mod format;
 
 use anyhow::{Context, Result};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use colored::Colorize;
 use executor::FailureDetail;
 use flint_core::loader::TestLoader;
@@ -14,6 +15,20 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Instant;
 use tracing_subscriber::EnvFilter;
+
+/// Output format for test results
+#[derive(Debug, Clone, Copy, Default, ValueEnum)]
+enum OutputFormat {
+    /// Human-readable colored output (default)
+    #[default]
+    Pretty,
+    /// Machine-readable JSON
+    Json,
+    /// Test Anything Protocol v13
+    Tap,
+    /// JUnit XML
+    Junit,
+}
 
 // Constants
 const CHUNK_SIZE: usize = 100;
@@ -139,7 +154,10 @@ impl TreeNode {
             self.failure = Some(detail);
             return;
         }
-        let child = self.children.entry(segments[0].to_string()).or_insert_with(TreeNode::new);
+        let child = self
+            .children
+            .entry(segments[0].to_string())
+            .or_insert_with(TreeNode::new);
         if segments.len() == 1 {
             child.failure = Some(detail);
         } else {
@@ -155,12 +173,15 @@ fn print_failure_tree(failures: &[(String, FailureDetail)]) {
     for (name, detail) in failures {
         let segments: Vec<&str> = name.split('/').collect();
         // Use a placeholder FailureDetail since we can't clone
-        root.insert(&segments, FailureDetail {
-            tick: detail.tick,
-            expected: detail.expected.clone(),
-            actual: detail.actual.clone(),
-            position: detail.position,
-        });
+        root.insert(
+            &segments,
+            FailureDetail {
+                tick: detail.tick,
+                expected: detail.expected.clone(),
+                actual: detail.actual.clone(),
+                position: detail.position,
+            },
+        );
     }
 
     // Render each top-level child
@@ -249,12 +270,17 @@ struct Args {
     /// Quiet mode: suppress progress bar
     #[arg(short, long)]
     quiet: bool,
+
+    /// Output format for test results
+    #[arg(long, value_enum, default_value_t = OutputFormat::Pretty)]
+    format: OutputFormat,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     // Setup logging
     tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
@@ -272,12 +298,20 @@ async fn main() -> Result<()> {
         if verbose {
             println!("{} Loading tests from {}...", "→".blue(), path.display());
         }
-        TestLoader::new(path, args.recursive)
-            .with_context(|| format!("Failed to initialize test loader for path: {}", path.display()))?
+        TestLoader::new(path, args.recursive).with_context(|| {
+            format!(
+                "Failed to initialize test loader for path: {}",
+                path.display()
+            )
+        })?
     } else {
         let default_path = Path::new("FlintBenchmark/tests");
-        TestLoader::new(default_path, true)
-            .with_context(|| format!("Failed to initialize test loader for default path: {}", default_path.display()))?
+        TestLoader::new(default_path, true).with_context(|| {
+            format!(
+                "Failed to initialize test loader for default path: {}",
+                default_path.display()
+            )
+        })?
     };
 
     // Collect test files - use tags if provided, otherwise collect all
@@ -285,10 +319,12 @@ async fn main() -> Result<()> {
         if verbose {
             println!("{} Filtering by tags: {:?}", "→".blue(), args.tags);
         }
-        test_loader.collect_by_tags(&args.tags)
+        test_loader
+            .collect_by_tags(&args.tags)
             .with_context(|| format!("Failed to collect tests by tags: {:?}", args.tags))?
     } else {
-        test_loader.collect_all_test_files()
+        test_loader
+            .collect_all_test_files()
             .context("Failed to collect test files")?
     };
 
@@ -315,7 +351,7 @@ async fn main() -> Result<()> {
     // Set action delay
     executor.set_action_delay(args.action_delay);
     executor.set_verbose(args.verbose);
-    executor.set_quiet(args.quiet);
+    executor.set_quiet(args.quiet || !matches!(args.format, OutputFormat::Pretty));
 
     if verbose && args.action_delay != 100 {
         println!(
@@ -368,7 +404,7 @@ async fn main() -> Result<()> {
             GRID_SIZE, GRID_SIZE
         );
     } else {
-        println!("Running {} tests...", format_number(total_tests));
+        eprintln!("Running {} tests...", format_number(total_tests));
     }
 
     let start_time = Instant::now();
@@ -435,12 +471,17 @@ async fn main() -> Result<()> {
 
     let elapsed = start_time.elapsed();
 
-    if verbose {
-        // Print verbose summary
-        print_test_summary(&all_results);
-    } else {
-        // Print concise summary
-        print_concise_summary(&all_results, &all_failures, elapsed);
+    match args.format {
+        OutputFormat::Pretty => {
+            if verbose {
+                print_test_summary(&all_results);
+            } else {
+                print_concise_summary(&all_results, &all_failures, elapsed);
+            }
+        }
+        OutputFormat::Json => format::print_json(&all_results, &all_failures, elapsed),
+        OutputFormat::Tap => format::print_tap(&all_results, &all_failures),
+        OutputFormat::Junit => format::print_junit(&all_results, &all_failures, elapsed),
     }
 
     if all_results.iter().any(|r| !r.success) {

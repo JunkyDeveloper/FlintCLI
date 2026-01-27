@@ -123,19 +123,19 @@ impl RecorderState {
     pub fn record_place(&mut self, world_pos: [i32; 3], block: &str) {
         // Set origin on first placement
         self.set_origin(world_pos);
-        
+
         let local_pos = self.to_local(world_pos);
         self.bounds.expand(local_pos);
-        
+
         // Deduplicate before adding
         self.deduplicate_actions(local_pos);
-        
+
         let step = self.get_or_create_current_step();
         step.actions.push(RecordedAction::Place {
             pos: local_pos,
             block: block.to_string(),
         });
-        
+
         // Update snapshot
         self.snapshot.insert(world_pos, block.to_string());
     }
@@ -146,16 +146,16 @@ impl RecorderState {
             // Can't remove before any placement
             return;
         }
-        
+
         let local_pos = self.to_local(world_pos);
         self.bounds.expand(local_pos);
-        
+
         // Deduplicate before adding
         self.deduplicate_actions(local_pos);
-        
+
         let step = self.get_or_create_current_step();
         step.actions.push(RecordedAction::Remove { pos: local_pos });
-        
+
         // Update snapshot - store air to track the removal
         self.snapshot.insert(world_pos, "minecraft:air".to_string());
     }
@@ -165,10 +165,10 @@ impl RecorderState {
         if self.origin.is_none() {
             self.set_origin(world_pos);
         }
-        
+
         let local_pos = self.to_local(world_pos);
         self.bounds.expand(local_pos);
-        
+
         let step = self.get_or_create_current_step();
         step.actions.push(RecordedAction::Assert {
             pos: local_pos,
@@ -179,11 +179,11 @@ impl RecorderState {
     /// Convert all Place/Remove actions in the current tick to Assertions
     pub fn convert_actions_to_asserts(&mut self) -> usize {
         let mut converted_count = 0;
-        
+
         if let Some(step) = self.timeline.last_mut() {
             if step.tick == self.current_tick {
                 let mut new_actions = Vec::new();
-                
+
                 // Drain existing actions and convert them
                 for action in step.actions.drain(..) {
                     match action {
@@ -193,9 +193,9 @@ impl RecorderState {
                         }
                         RecordedAction::Remove { pos } => {
                             // Removing a block means asserting it is air
-                            new_actions.push(RecordedAction::Assert { 
-                                pos, 
-                                block: "minecraft:air".to_string() 
+                            new_actions.push(RecordedAction::Assert {
+                                pos,
+                                block: "minecraft:air".to_string(),
                             });
                             converted_count += 1;
                         }
@@ -205,11 +205,11 @@ impl RecorderState {
                         }
                     }
                 }
-                
+
                 step.actions = new_actions;
             }
         }
-        
+
         converted_count
     }
 
@@ -294,16 +294,16 @@ impl RecorderState {
     /// Save the test to a file
     pub fn save(&self) -> Result<PathBuf> {
         let test_spec = self.generate_test_spec();
-        
+
         // Create parent directories if needed
         if let Some(parent) = self.test_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        
+
         // Write the JSON file with pretty formatting using serde
         let json_str = serde_json::to_string_pretty(&test_spec)?;
         std::fs::write(&self.test_path, json_str)?;
-        
+
         Ok(self.test_path.clone())
     }
 }

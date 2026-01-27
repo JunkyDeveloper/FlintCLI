@@ -22,7 +22,7 @@ fn test_bounding_box() {
 fn test_local_position() {
     let mut recorder = RecorderState::new("test", std::path::Path::new("/tmp"));
     recorder.set_origin([100, 64, 200]);
-    
+
     assert_eq!(recorder.to_local([100, 64, 200]), [0, 0, 0]);
     assert_eq!(recorder.to_local([105, 65, 198]), [5, 1, -2]);
 }
