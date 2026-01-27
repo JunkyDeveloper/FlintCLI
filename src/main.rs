@@ -271,6 +271,10 @@ struct Args {
     #[arg(short, long)]
     quiet: bool,
 
+    /// Stop after the first test failure
+    #[arg(long)]
+    fail_fast: bool,
+
     /// Output format for test results
     #[arg(long, value_enum, default_value_t = OutputFormat::Pretty)]
     format: OutputFormat,
@@ -352,6 +356,7 @@ async fn main() -> Result<()> {
     executor.set_action_delay(args.action_delay);
     executor.set_verbose(args.verbose);
     executor.set_quiet(args.quiet || !matches!(args.format, OutputFormat::Pretty));
+    executor.set_fail_fast(args.fail_fast);
 
     if verbose && args.action_delay != 100 {
         println!(
@@ -457,6 +462,10 @@ async fn main() -> Result<()> {
 
         all_results.extend(output.results);
         all_failures.extend(output.failures);
+
+        if args.fail_fast && !all_failures.is_empty() {
+            break;
+        }
 
         if verbose && chunk_idx + 1 < total_chunks {
             println!(

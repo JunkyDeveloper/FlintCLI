@@ -39,6 +39,7 @@ pub struct TestExecutor {
     recorder: Option<recorder::RecorderState>,
     verbose: bool,
     quiet: bool,
+    fail_fast: bool,
 }
 
 impl Default for TestExecutor {
@@ -49,6 +50,7 @@ impl Default for TestExecutor {
             recorder: None,
             verbose: false,
             quiet: false,
+            fail_fast: false,
         }
     }
 }
@@ -68,6 +70,10 @@ impl TestExecutor {
 
     pub fn set_quiet(&mut self, quiet: bool) {
         self.quiet = quiet;
+    }
+
+    pub fn set_fail_fast(&mut self, fail_fast: bool) {
+        self.fail_fast = fail_fast;
     }
 
     pub async fn connect(&mut self, server: &str) -> Result<()> {
@@ -365,6 +371,7 @@ impl TestExecutor {
         }
 
         let show_progress = !verbose && !self.quiet;
+        let fail_fast = self.fail_fast;
 
         // Execute merged timeline
         let mut current_tick = 0;
@@ -397,6 +404,9 @@ impl TestExecutor {
                             if test_failures[*test_idx].is_none() {
                                 test_failures[*test_idx] = Some(detail);
                             }
+                            if fail_fast {
+                                break;
+                            }
                         }
                         Err(e) => {
                             test_results[*test_idx].1 += 1;
@@ -409,9 +419,17 @@ impl TestExecutor {
                                     e.to_string().red()
                                 );
                             }
+                            if fail_fast {
+                                break;
+                            }
                         }
                     }
                 }
+            }
+
+            // Break out of the timeline loop on first failure
+            if fail_fast && test_results.iter().any(|(_, failed)| *failed > 0) {
+                break;
             }
 
             // Clean up tests that have completed

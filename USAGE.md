@@ -24,6 +24,7 @@ flintmc [OPTIONS] --server <SERVER> [PATH]
 | `--action-delay <MS>` | `-d` | Delay between actions in milliseconds (default: 100) |
 | `--verbose` | `-v` | Show detailed per-action output during execution |
 | `--quiet` | `-q` | Suppress the progress bar |
+| `--fail-fast` | | Stop after the first test failure |
 | `--format <FORMAT>` | | Output format: `pretty` (default), `json`, `tap`, `junit` |
 
 ## Running tests
