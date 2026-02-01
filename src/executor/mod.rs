@@ -220,7 +220,7 @@ impl TestExecutor {
                         self.handle_record_tick().await?;
                     }
 
-                    "!pos1" => {
+                    "!pos1" | "!pos" => {
                         if args.len() < 3 {
                             self.bot
                                 .send_command("say Usage: !assert <x> <y> <z>")
