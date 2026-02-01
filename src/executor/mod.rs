@@ -40,6 +40,7 @@ pub struct TestExecutor {
     verbose: bool,
     quiet: bool,
     fail_fast: bool,
+    pos1: Option<[i32; 3]>,
 }
 
 impl Default for TestExecutor {
@@ -51,6 +52,7 @@ impl Default for TestExecutor {
             verbose: false,
             quiet: false,
             fail_fast: false,
+            pos1: None,
         }
     }
 }
@@ -216,6 +218,16 @@ impl TestExecutor {
 
                     "!tick" | "!next" => {
                         self.handle_record_tick().await?;
+                    }
+
+                    "!pos1" => {
+                        if args.len() < 3 {
+                            self.bot
+                                .send_command("say Usage: !assert <x> <y> <z>")
+                                .await?;
+                            continue;
+                        }
+                        self.handle_pos1(&args);
                     }
 
                     "!assert" => {
